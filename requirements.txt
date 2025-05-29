@@ -1,0 +1,7 @@
+wordfreq
+wordsegment
+rich
+prompt_toolkit
+transformers
+torch
+

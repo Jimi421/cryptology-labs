@@ -1,0 +1,28 @@
+[
+  {
+    "key": 3,
+    "plaintext": "HELLO WORLD",
+    "ciphertext": "KHOOR ZRUOG"
+  },
+  {
+    "key": 5,
+    "plaintext": "SECRET MESSAGE",
+    "ciphertext": "XJHWJY RJXXFLJ"
+  },
+  {
+    "key": 13,
+    "plaintext": "DEFEND THE EAST WALL",
+    "ciphertext": "QRRSRA GUR RNFG JNYY"
+  },
+  {
+    "key": 7,
+    "plaintext": "CRYPTOGRAPHY IS FUN",
+    "ciphertext": "JYWAAVNYHPOV PZ MBU"
+  },
+  {
+    "key": 1,
+    "plaintext": "THE QUICK BROWN FOX",
+    "ciphertext": "UIF RVJDL CSPXO GPY"
+  }
+]
+

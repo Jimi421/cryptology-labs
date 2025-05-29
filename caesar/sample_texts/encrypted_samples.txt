@@ -1,0 +1,17 @@
+# Caesar Cipher Encrypted Samples
+# Format: "shift | original text | encrypted text"
+
+3 | HELLO WORLD | KHOOR ZRUOG
+5 | SECRET MESSAGE | XJHWJY RJXXFLJ
+13 | DEFEND THE EAST WALL | QRRSRA GUR RNFG JNYY
+7 | CRYPTOGRAPHY IS FUN | JYWAAVNYHPOV PZ MBU
+1 | THE QUICK BROWN FOX | UIF RVJDL CSPXO GPY
+
+# Randomized (unknown shift – for brute-force demo)
+?? | ZHOFRPH WR WKH FUBSWR ORXQJH
+?? | WKH FDHVDU FLSKHU LV VLPSOH EXW FODVVLF
+?? | LFDVDU Hqfrglqj dqg Ghfrglqj lv ixq
+
+# Non-standard symbols and spacing
+?? | YMNX% NX 1&%TS 1NSL 3&% FSI YMNX 1J% RFPJ
+
