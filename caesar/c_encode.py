@@ -3,7 +3,7 @@
 Caesar Cipher Encoder
 
 Usage:
-  python3 caesar_encode.py --shift N "Your plaintext here"
+  python3 c_encode.py --shift N "Your plaintext here"
 
 This script applies a positive Caesar shift to encode input text.
 """
