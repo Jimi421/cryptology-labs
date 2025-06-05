@@ -18,6 +18,7 @@ Usage:
 import re
 import math
 from collections import Counter, defaultdict
+import random
 from itertools import combinations
 from typing import List, Tuple, Dict, Optional
 
@@ -176,6 +177,38 @@ class SegmentationStrategy(ScoreStrategy):
         valid = sum(1 for w in tokens if w.isalpha())
         return (valid / total, valid, total)
 
+
+class NGramStrategy(ScoreStrategy):
+    """Score plaintext using simple n-gram log probabilities."""
+
+    DEFAULT_TEXT = (
+        "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG. "
+        "THIS SAMPLE TEXT PROVIDES COMMON ENGLISH WORDS FOR NGRAM SCORING."
+    )
+
+    def __init__(self, n: int = 4, corpus: Optional[str] = None):
+        self.n = n
+        raw = clean_text(corpus or self.DEFAULT_TEXT)
+        counts: Dict[str, int] = defaultdict(int)
+        for i in range(len(raw) - n + 1):
+            counts[raw[i:i + n]] += 1
+        self.total = sum(counts.values())
+        self.log_probs = {
+            g: math.log10(c / self.total) for g, c in counts.items()
+        }
+        # floor value for unseen n-grams
+        self.floor = math.log10(0.01 / self.total)
+
+    def score(self, text: str) -> float:
+        text = clean_text(text)
+        if len(text) < self.n:
+            return float('-inf')
+        s = 0.0
+        for i in range(len(text) - self.n + 1):
+            g = text[i:i + self.n]
+            s += self.log_probs.get(g, self.floor)
+        return s
+
 # ─── External Dictionary Fallback (optional) ─────────────────────────────────
 def load_wordlist(path: str, min_len: int = 2, max_len: int = 6) -> List[str]:
     words: List[str] = []
@@ -289,6 +322,99 @@ def crack_vigenere(
 
     all_results.sort(reverse=True, key=lambda x: x[0])
     return all_results[:top_n_results]
+
+
+# ─── N-Gram Hill-Climb & Simulated Annealing Attacks ─────────────────────────
+
+def hill_climb_search(ciphertext: str, key_length: int, scorer: NGramStrategy,
+                      max_rounds: int = 20) -> Tuple[str, str, float]:
+    ciphertext = clean_text(ciphertext)
+    key = ''.join(random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(key_length))
+    best_score = scorer.score(vigenere_decrypt(ciphertext, key))
+    improved = True
+    while improved:
+        improved = False
+        for pos in range(key_length):
+            current_letter = key[pos]
+            current_best = best_score
+            best_char = current_letter
+            for ch in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+                trial_key = key[:pos] + ch + key[pos+1:]
+                pt = vigenere_decrypt(ciphertext, trial_key)
+                sc = scorer.score(pt)
+                if sc > current_best:
+                    current_best = sc
+                    best_char = ch
+            if current_best > best_score:
+                key = key[:pos] + best_char + key[pos+1:]
+                best_score = current_best
+                improved = True
+    plaintext = vigenere_decrypt(ciphertext, key)
+    return key, plaintext, best_score
+
+
+def simulated_annealing_search(
+    ciphertext: str,
+    key_length: int,
+    scorer: NGramStrategy,
+    iterations: int = 1000,
+    temp: float = 20.0,
+    cooling: float = 0.995,
+) -> Tuple[str, str, float]:
+    ciphertext = clean_text(ciphertext)
+    key = ''.join(random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(key_length))
+    plain = vigenere_decrypt(ciphertext, key)
+    score = scorer.score(plain)
+    best_key, best_score = key, score
+
+    for _ in range(iterations):
+        pos = random.randrange(key_length)
+        ch = random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        cand_key = key[:pos] + ch + key[pos+1:]
+        cand_plain = vigenere_decrypt(ciphertext, cand_key)
+        cand_score = scorer.score(cand_plain)
+        if cand_score > score or math.exp((cand_score - score) / temp) > random.random():
+            key, score = cand_key, cand_score
+            if score > best_score:
+                best_key, best_score = key, score
+        temp = max(temp * cooling, 0.1)
+
+    plaintext = vigenere_decrypt(ciphertext, best_key)
+    return best_key, plaintext, best_score
+
+
+def crack_vigenere_hill(
+    ciphertext_raw: str,
+    max_key_length: int = 12,
+    top_n_lengths: int = 3,
+    top_n_results: int = 5,
+) -> List[Tuple[float, str, str, str]]:
+    cipher = clean_text(ciphertext_raw)
+    lengths = guess_key_lengths_ic(cipher, max_length=max_key_length, top_n=top_n_lengths)
+    scorer = NGramStrategy()
+    results = []
+    for L in lengths:
+        key, pt, sc = hill_climb_search(cipher, L, scorer)
+        results.append((sc, f"Hill(L={L})", key, pt))
+    results.sort(reverse=True, key=lambda x: x[0])
+    return results[:top_n_results]
+
+
+def crack_vigenere_anneal(
+    ciphertext_raw: str,
+    max_key_length: int = 12,
+    top_n_lengths: int = 3,
+    top_n_results: int = 5,
+) -> List[Tuple[float, str, str, str]]:
+    cipher = clean_text(ciphertext_raw)
+    lengths = guess_key_lengths_ic(cipher, max_length=max_key_length, top_n=top_n_lengths)
+    scorer = NGramStrategy()
+    results = []
+    for L in lengths:
+        key, pt, sc = simulated_annealing_search(cipher, L, scorer)
+        results.append((sc, f"Anneal(L={L})", key, pt))
+    results.sort(reverse=True, key=lambda x: x[0])
+    return results[:top_n_results]
 
 # ─── Entry‐Point for Interactive Use ───────────────────────────────────────────
 if __name__ == "__main__":

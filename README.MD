@@ -11,7 +11,7 @@ Each folder contains a standalone module or utility designed to analyze, break, 
 | Module | Description |
 |--------|-------------|
 | `caesar/` | Caesar Cipher decoding suite with scoring heuristics, brute-force, TUI slider, and GPT-backed fallback |
-| `vigenere_cipher.py/` | Advanced Vigenère cracking CLI with IC & Kasiski analysis, wordfreq scoring, dictionary fallback, and batch/watch modes |
+| `vigenere_cipher.py/` | Advanced Vigenère cracking CLI with IC & Kasiski analysis, wordfreq and n‑gram scoring, hill‑climb/annealing attacks, and batch/watch modes |
 | `substitution/` | *(Planned)* Tools for breaking monoalphabetic substitution ciphers using statistical methods |
 | `rsa/` | *(Planned)* Modular RSA demo with key generation, signing, and encryption primitives |
 | `playfair/` | *(Planned)* Playfair cipher grid tools for encoding/decoding and visualization |
@@ -49,7 +49,7 @@ python3 c_decode.py "Encrypted Message Here"
 📊 Tooling Philosophy
 No fluff. Every tool is designed to run from the command line with minimal overhead.
 
-Modular scoring. Multiple heuristics are used to evaluate candidate decryptions: segmentation, frequency, substrings, chi-squared, and ensemble methods.
+Modular scoring. Multiple heuristics are used to evaluate candidate decryptions: segmentation, frequency, n-gram statistics, substrings, chi-squared, and ensemble methods.
 
 Optional AI fallback. Selected tools support language model scoring for high-entropy ciphertexts.
 
