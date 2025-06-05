@@ -49,6 +49,22 @@ def split_into_subtexts(ciphertext: str, key_length: int) -> List[str]:
         subtexts[idx % key_length] += ch
     return subtexts
 
+# ─── Crib Alignment Helper ────────────────────────────────────────────────────
+def apply_crib(ciphertext: str, crib: str) -> List[Tuple[int, str]]:
+    """Slide a plaintext crib across the ciphertext and derive key fragments."""
+    text = clean_text(ciphertext)
+    crib = clean_text(crib)
+    results: List[Tuple[int, str]] = []
+    if not text or not crib or len(crib) > len(text):
+        return results
+    for offset in range(len(text) - len(crib) + 1):
+        frag = []
+        for c_char, p_char in zip(text[offset:offset + len(crib)], crib):
+            shift = (ord(c_char) - ord(p_char)) % 26
+            frag.append(chr(shift + 65))
+        results.append((offset, ''.join(frag)))
+    return results
+
 # ─── Index of Coincidence (IC) ──────────────────────────────────────────────────
 def index_of_coincidence(subtext: str) -> float:
     N = len(subtext)
@@ -227,6 +243,7 @@ def crack_vigenere(
     ciphertext_raw: str,
     use_kasiski: bool = True,
     wordlist_path: Optional[str] = None,
+    crib: Optional[str] = None,
     max_key_length: int = 12,
     top_n_lengths: int = 3,
     top_n_results: int = 5
@@ -237,6 +254,10 @@ def crack_vigenere(
     ciphertext = clean_text(ciphertext_raw)
     if not ciphertext:
         raise ValueError("Input contains no alphabetic characters.")
+
+    crib_fragments: List[Tuple[int, str]] = []
+    if crib:
+        crib_fragments = apply_crib(ciphertext, crib)
 
     # 1) Guess lengths via IC
     ic_lengths = guess_key_lengths_ic(ciphertext, max_length=max_key_length, top_n=top_n_lengths)
@@ -290,6 +311,26 @@ def crack_vigenere(
             method = f"Freq(L={L})"
 
         all_results.append((combined, method, key_freq, plaintext_freq))
+
+        # Apply crib hints if provided
+        if crib_fragments:
+            for off, frag in crib_fragments:
+                key_list = list(key_freq)
+                for idx, ch in enumerate(frag):
+                    pos = (off + idx) % L
+                    if pos < L:
+                        key_list[pos] = ch
+                hint_key = ''.join(key_list)
+                pt_hint = vigenere_decrypt(ciphertext_raw, hint_key)
+                wf_h, _, _ = wf_scorer.score(pt_hint)
+                if seg_scorer:
+                    seg_h, _, _ = seg_scorer.score(pt_hint)
+                    comb_h = wf_h + seg_h
+                    method_h = f"{method}+Crib"
+                else:
+                    comb_h = wf_h
+                    method_h = f"{method}+Crib"
+                all_results.append((comb_h, method_h, hint_key, pt_hint))
 
         # Dictionary fallback if length small
         if dictionary_keys and L <= fallback_max_len:
@@ -433,10 +474,15 @@ if __name__ == "__main__":
     if not wordlist_input:
         wordlist_input = None
 
+    crib_input = input("Known plaintext fragment (crib) (press Enter to skip):\n> ").strip()
+    if not crib_input:
+        crib_input = None
+
     results = crack_vigenere(
         ciphertext_raw=ciphertext_input,
         use_kasiski=use_kasiski,
         wordlist_path=wordlist_input,
+        crib=crib_input,
         max_key_length=12,
         top_n_lengths=3,
         top_n_results=5

@@ -53,6 +53,8 @@ def load_config(profile: str, config_path: str = "config.yaml") -> dict:
               help="Enable or disable Kasiski examination. Overrides config.")
 @click.option("--wordlist", "-l", type=click.Path(exists=True),
               help="Path to a local wordlist file for dictionary fallback (length ≤ 4).")
+@click.option("--crib", "-x", type=str,
+              help="Known plaintext fragment used as a crib for key hints.")
 @click.option("--max-keylen", "-k", type=int, default=None,
               help="Maximum key length for IC/frequency analysis. Overrides config.")
 @click.option("--top-lengths", "-n", type=int, default=None,
@@ -75,6 +77,7 @@ def main(
     watch,
     use_kasiski,
     wordlist,
+    crib,
     max_keylen,
     top_lengths,
     top_results,
@@ -112,6 +115,7 @@ def main(
         click.echo(f"  Profile:        {profile}")
         click.echo(f"  Use Kasiski:    {use_kasiski}")
         click.echo(f"  Wordlist Path:  {wordlist}")
+        click.echo(f"  Crib:          {crib}")
         click.echo(f"  Max Key Length: {max_keylen}")
         click.echo(f"  Top Lengths:    {top_lengths}")
         click.echo(f"  Top Results:    {top_results}")
@@ -171,6 +175,7 @@ def main(
                             ct_raw,
                             use_kasiski=use_kasiski,
                             wordlist_path=wordlist,
+                            crib=crib,
                             max_key_length=max_keylen,
                             top_n_lengths=top_lengths,
                             top_n_results=top_results,
@@ -236,6 +241,7 @@ def main(
                         ct_raw,
                         use_kasiski=use_kasiski,
                         wordlist_path=wordlist,
+                        crib=crib,
                         max_key_length=max_keylen,
                         top_n_lengths=top_lengths,
                         top_n_results=top_results,
@@ -286,6 +292,7 @@ def main(
                 ct_raw,
                 use_kasiski=use_kasiski,
                 wordlist_path=wordlist,
+                crib=crib,
                 max_key_length=max_keylen,
                 top_n_lengths=top_lengths,
                 top_n_results=top_results
