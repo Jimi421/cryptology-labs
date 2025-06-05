@@ -19,6 +19,8 @@ from batch_helpers import (
 # Import the core cracking function and also the preview helpers
 from tools.vigenere_crack_core import (
     crack_vigenere,
+    crack_vigenere_hill,
+    crack_vigenere_anneal,
     clean_text,
     guess_key_lengths_ic,
     guess_key_lengths_kasiski
@@ -64,6 +66,8 @@ def load_config(profile: str, config_path: str = "config.yaml") -> dict:
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging.")
 @click.option("--dry-run", is_flag=True, help="Validate inputs and show planned actions without decrypting.")
 @click.option("--preview", is_flag=True, help="Only run IC/Kasiski and show guessed lengths, then exit.")
+@click.option("--hill-climb", is_flag=True, help="Use hill-climb search with n-gram scoring.")
+@click.option("--anneal", is_flag=True, help="Use simulated annealing with n-gram scoring.")
 def main(
     profile,
     ciphertext,
@@ -78,7 +82,9 @@ def main(
     export_csv,
     verbose,
     dry_run,
-    preview
+    preview,
+    hill_climb,
+    anneal
 ):
     """
     Advanced Vigenère Cipher Cracking Tool
@@ -96,6 +102,10 @@ def main(
     top_lengths = top_lengths if top_lengths is not None else conf.get("top_n_lengths", 3)
     top_results = top_results if top_results is not None else conf.get("top_n_results", 5)
 
+    if hill_climb and anneal:
+        click.echo("Error: --hill-climb and --anneal cannot be used together.")
+        return
+
     # ─── Dry Run / Preview ─────────────────────────────────────────────────────
     if dry_run:
         click.echo("DRY RUN: The tool will run with the following parameters:")
@@ -105,6 +115,10 @@ def main(
         click.echo(f"  Max Key Length: {max_keylen}")
         click.echo(f"  Top Lengths:    {top_lengths}")
         click.echo(f"  Top Results:    {top_results}")
+        if hill_climb:
+            click.echo("  Mode:          Hill-Climb")
+        if anneal:
+            click.echo("  Mode:          Simulated Annealing")
         if batch:
             click.echo(f"  Batch Folder:   {batch}")
         if watch:
@@ -138,14 +152,30 @@ def main(
                     kas_lens = guess_key_lengths_kasiski(cleaned, seq_len=3, top_n=top_lengths) if use_kasiski else []
                     click.echo(f"[Preview] '{filename}': IC→{ic_lens}, Kasiski→{kas_lens}")
                 else:
-                    results = crack_vigenere(
-                        ct_raw,
-                        use_kasiski=use_kasiski,
-                        wordlist_path=wordlist,
-                        max_key_length=max_keylen,
-                        top_n_lengths=top_lengths,
-                        top_n_results=top_results
-                    )
+                    if hill_climb:
+                        results = crack_vigenere_hill(
+                            ct_raw,
+                            max_key_length=max_keylen,
+                            top_n_lengths=top_lengths,
+                            top_n_results=top_results,
+                        )
+                    elif anneal:
+                        results = crack_vigenere_anneal(
+                            ct_raw,
+                            max_key_length=max_keylen,
+                            top_n_lengths=top_lengths,
+                            top_n_results=top_results,
+                        )
+                    else:
+                        results = crack_vigenere(
+                            ct_raw,
+                            use_kasiski=use_kasiski,
+                            wordlist_path=wordlist,
+                            max_key_length=max_keylen,
+                            top_n_lengths=top_lengths,
+                            top_n_results=top_results,
+                        )
+
                     base = os.path.splitext(filename)[0]
                     if format_json:
                         out_path = os.path.join(output_folder, f"{base}_results.json")
@@ -154,7 +184,6 @@ def main(
                         out_path = os.path.join(output_folder, f"{base}_results.csv")
                         export_to_csv(results, out_path)
 
-                    # Print top 3 candidates to console
                     click.echo(f"\n[Top candidates for {filename}]")
                     for idx, (score, method, key, pt) in enumerate(results, start=1):
                         click.echo(f"{idx}. [{method}] Key='{key}' Score={score:.3f}")
@@ -188,14 +217,29 @@ def main(
             try:
                 with open(path_to_file, "r", encoding="utf-8") as f:
                     ct_raw = f.read()
-                results = crack_vigenere(
-                    ct_raw,
-                    use_kasiski=use_kasiski,
-                    wordlist_path=wordlist,
-                    max_key_length=max_keylen,
-                    top_n_lengths=top_lengths,
-                    top_n_results=top_results
-                )
+                if hill_climb:
+                    results = crack_vigenere_hill(
+                        ct_raw,
+                        max_key_length=max_keylen,
+                        top_n_lengths=top_lengths,
+                        top_n_results=top_results,
+                    )
+                elif anneal:
+                    results = crack_vigenere_anneal(
+                        ct_raw,
+                        max_key_length=max_keylen,
+                        top_n_lengths=top_lengths,
+                        top_n_results=top_results,
+                    )
+                else:
+                    results = crack_vigenere(
+                        ct_raw,
+                        use_kasiski=use_kasiski,
+                        wordlist_path=wordlist,
+                        max_key_length=max_keylen,
+                        top_n_lengths=top_lengths,
+                        top_n_results=top_results,
+                    )
                 click.echo(f"\n[Watch Mode Top Candidates for {filename}]")
                 for idx, (score, method, key, pt) in enumerate(results, start=1):
                     snippet = pt if len(pt) < 60 else pt[:57] + "..."
@@ -223,14 +267,29 @@ def main(
             click.echo(f"[Preview] IC→{ic_lens}, Kasiski→{kas_lens}")
             return
 
-        results = crack_vigenere(
-            ct_raw,
-            use_kasiski=use_kasiski,
-            wordlist_path=wordlist,
-            max_key_length=max_keylen,
-            top_n_lengths=top_lengths,
-            top_n_results=top_results
-        )
+        if hill_climb:
+            results = crack_vigenere_hill(
+                ct_raw,
+                max_key_length=max_keylen,
+                top_n_lengths=top_lengths,
+                top_n_results=top_results,
+            )
+        elif anneal:
+            results = crack_vigenere_anneal(
+                ct_raw,
+                max_key_length=max_keylen,
+                top_n_lengths=top_lengths,
+                top_n_results=top_results,
+            )
+        else:
+            results = crack_vigenere(
+                ct_raw,
+                use_kasiski=use_kasiski,
+                wordlist_path=wordlist,
+                max_key_length=max_keylen,
+                top_n_lengths=top_lengths,
+                top_n_results=top_results
+            )
         click.echo("\n[Top Candidates]")
         for idx, (score, method, key, pt) in enumerate(results, start=1):
             click.echo(f"{idx}. [{method}] Key='{key}' Score={score:.3f}")
