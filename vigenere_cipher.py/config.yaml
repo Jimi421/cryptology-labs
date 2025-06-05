@@ -1,0 +1,15 @@
+default:
+  use_kasiski: true
+  wordlist_path: data/wordlist.txt
+  max_key_length: 12
+  top_n_lengths: 3
+  top_n_results: 5
+  output_folder: output
+
+fast_mode:
+  use_kasiski: false
+  max_key_length: 8
+  top_n_lengths: 2
+  top_n_results: 3
+  output_folder: output
+

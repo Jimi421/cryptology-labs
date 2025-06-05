@@ -1,0 +1,7 @@
+click>=8.0
+PyYAML>=5.4
+tqdm>=4.0
+wordfreq>=2.0
+wordsegment>=1.3
+watchdog>=2.1
+requests>=2.25
