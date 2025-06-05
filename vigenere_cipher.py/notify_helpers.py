@@ -4,6 +4,7 @@ import smtplib
 from email.message import EmailMessage
 import requests
 import logging
+import os
 
 logger = logging.getLogger("vigenere_tool.notify")
 
