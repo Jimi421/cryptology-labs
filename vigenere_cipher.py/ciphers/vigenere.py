@@ -14,14 +14,17 @@ def vigenere_encrypt(text: str, keyword: str) -> str:
     Only alphabetic characters are shifted; other characters are preserved.
     """
     text = text.upper()
-    key = repeat_key(keyword, len(text))
+    key = keyword.upper()
     result = []
+    key_idx = 0
 
-    for t_char, k_char in zip(text, key):
+    for t_char in text:
         if t_char.isalpha():
+            k_char = key[key_idx % len(key)]
             shift = ord(k_char) - ord('A')
             encrypted_char = chr((ord(t_char) - ord('A') + shift) % 26 + ord('A'))
             result.append(encrypted_char)
+            key_idx += 1
         else:
             result.append(t_char)
 
@@ -33,14 +36,17 @@ def vigenere_decrypt(text: str, keyword: str) -> str:
     Only alphabetic characters are shifted; other characters are preserved.
     """
     text = text.upper()
-    key = repeat_key(keyword, len(text))
+    key = keyword.upper()
     result = []
+    key_idx = 0
 
-    for t_char, k_char in zip(text, key):
+    for t_char in text:
         if t_char.isalpha():
+            k_char = key[key_idx % len(key)]
             shift = ord(k_char) - ord('A')
             decrypted_char = chr((ord(t_char) - ord('A') - shift + 26) % 26 + ord('A'))
             result.append(decrypted_char)
+            key_idx += 1
         else:
             result.append(t_char)
 
