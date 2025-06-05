@@ -7,6 +7,7 @@ import shutil
 import logging
 from pathlib import Path
 from datetime import datetime
+import time
 
 # ─── Attempt to import tqdm (guard if missing) ────────────────────────────────
 try:
@@ -94,7 +95,7 @@ def process_watch_folder(input_folder: str, process_file_callback) -> None:
     logger.info(f"Watching folder: {input_folder}")
     try:
         while True:
-            pass  # Keep running; use Ctrl+C to stop
+            time.sleep(1)  # Keep running; use Ctrl+C to stop
     except KeyboardInterrupt:
         observer.stop()
     observer.join()
