@@ -20,10 +20,14 @@ import math
 from collections import Counter, defaultdict
 import random
 from itertools import combinations
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Iterable
 
 # Import your core Vigenère functions:
-from ciphers.vigenere import vigenere_decrypt, repeat_key
+from ciphers.vigenere import (
+    vigenere_decrypt,
+    vigenere_autokey_decrypt,
+    repeat_key,
+)
 
 # ─── English Letter Frequencies for Chi-Squared ────────────────────────────────
 ENGLISH_FREQ: Dict[str, float] = {
@@ -36,9 +40,24 @@ ENGLISH_FREQ: Dict[str, float] = {
 }
 
 # ─── Text Cleaning & Subtext Splitting ─────────────────────────────────────────
-def clean_text(text: str) -> str:
-    """Remove non-letters, uppercase everything."""
-    return ''.join(ch for ch in text.upper() if ch.isalpha())
+def clean_text(
+    text: str,
+    variant: str = "standard",
+    homophonic_map: Optional[Dict[str, Iterable[str]]] = None,
+) -> str:
+    """Remove non-letters and handle homophonic mapping."""
+    text = text.upper()
+    if variant == "homophonic" and homophonic_map:
+        rev: Dict[str, str] = {}
+        for p, opts in homophonic_map.items():
+            if isinstance(opts, str):
+                for o in opts:
+                    rev[o] = p
+            else:
+                for o in opts:
+                    rev[o] = p
+        text = ''.join(rev.get(ch, ch) for ch in text)
+    return ''.join(ch for ch in text if ch.isalpha())
 
 def split_into_subtexts(ciphertext: str, key_length: int) -> List[str]:
     """
@@ -50,9 +69,14 @@ def split_into_subtexts(ciphertext: str, key_length: int) -> List[str]:
     return subtexts
 
 # ─── Crib Alignment Helper ────────────────────────────────────────────────────
-def apply_crib(ciphertext: str, crib: str) -> List[Tuple[int, str]]:
+def apply_crib(
+    ciphertext: str,
+    crib: str,
+    variant: str = "standard",
+    homophonic_map: Optional[Dict[str, Iterable[str]]] = None,
+) -> List[Tuple[int, str]]:
     """Slide a plaintext crib across the ciphertext and derive key fragments."""
-    text = clean_text(ciphertext)
+    text = clean_text(ciphertext, variant, homophonic_map)
     crib = clean_text(crib)
     results: List[Tuple[int, str]] = []
     if not text or not crib or len(crib) > len(text):
@@ -202,9 +226,15 @@ class NGramStrategy(ScoreStrategy):
         "THIS SAMPLE TEXT PROVIDES COMMON ENGLISH WORDS FOR NGRAM SCORING."
     )
 
-    def __init__(self, n: int = 4, corpus: Optional[str] = None):
+    def __init__(
+        self,
+        n: int = 4,
+        corpus: Optional[str] = None,
+        variant: str = "standard",
+        homophonic_map: Optional[Dict[str, Iterable[str]]] = None,
+    ):
         self.n = n
-        raw = clean_text(corpus or self.DEFAULT_TEXT)
+        raw = clean_text(corpus or self.DEFAULT_TEXT, variant, homophonic_map)
         counts: Dict[str, int] = defaultdict(int)
         for i in range(len(raw) - n + 1):
             counts[raw[i:i + n]] += 1
@@ -215,8 +245,10 @@ class NGramStrategy(ScoreStrategy):
         # floor value for unseen n-grams
         self.floor = math.log10(0.01 / self.total)
 
-    def score(self, text: str) -> float:
-        text = clean_text(text)
+    def score(
+        self, text: str, variant: str = "standard", homophonic_map: Optional[Dict[str, Iterable[str]]] = None
+    ) -> float:
+        text = clean_text(text, variant, homophonic_map)
         if len(text) < self.n:
             return float('-inf')
         s = 0.0
@@ -244,6 +276,8 @@ def crack_vigenere(
     use_kasiski: bool = True,
     wordlist_path: Optional[str] = None,
     crib: Optional[str] = None,
+    variant: str = "standard",
+    homophonic_map: Optional[Dict[str, Iterable[str]]] = None,
     max_key_length: int = 12,
     top_n_lengths: int = 3,
     top_n_results: int = 5
@@ -251,13 +285,13 @@ def crack_vigenere(
     """
     Returns a list of (combined_score, method, key, plaintext) sorted descending.
     """
-    ciphertext = clean_text(ciphertext_raw)
+    ciphertext = clean_text(ciphertext_raw, variant, homophonic_map)
     if not ciphertext:
         raise ValueError("Input contains no alphabetic characters.")
 
     crib_fragments: List[Tuple[int, str]] = []
     if crib:
-        crib_fragments = apply_crib(ciphertext, crib)
+        crib_fragments = apply_crib(ciphertext, crib, variant, homophonic_map)
 
     # 1) Guess lengths via IC
     ic_lengths = guess_key_lengths_ic(ciphertext, max_length=max_key_length, top_n=top_n_lengths)
@@ -293,13 +327,15 @@ def crack_vigenere(
 
     all_results: List[Tuple[float, str, str, str]] = []
 
+    decrypt_func = vigenere_autokey_decrypt if variant == "autokey" else vigenere_decrypt
+
     for L in length_guesses:
         if L <= 0 or L > max_key_length:
             continue
 
         # Frequency-based key recovery
         key_freq = recover_key_by_frequency(ciphertext, L)
-        plaintext_freq = vigenere_decrypt(ciphertext_raw, key_freq)
+        plaintext_freq = decrypt_func(ciphertext_raw, key_freq, homophonic_map)
 
         wf_ratio, wf_valid, wf_total = wf_scorer.score(plaintext_freq)
         if seg_scorer:
@@ -321,7 +357,7 @@ def crack_vigenere(
                     if pos < L:
                         key_list[pos] = ch
                 hint_key = ''.join(key_list)
-                pt_hint = vigenere_decrypt(ciphertext_raw, hint_key)
+                pt_hint = decrypt_func(ciphertext_raw, hint_key, homophonic_map)
                 wf_h, _, _ = wf_scorer.score(pt_hint)
                 if seg_scorer:
                     seg_h, _, _ = seg_scorer.score(pt_hint)
@@ -336,7 +372,7 @@ def crack_vigenere(
         if dictionary_keys and L <= fallback_max_len:
             candidates = [w for w in dictionary_keys if len(w) == L]
             for kw in candidates:
-                pt = vigenere_decrypt(ciphertext_raw, kw)
+                pt = decrypt_func(ciphertext_raw, kw, homophonic_map)
                 wf_r2, wf_v2, wf_t2 = wf_scorer.score(pt)
                 if seg_scorer:
                     seg_r2, seg_v2, seg_t2 = seg_scorer.score(pt)
@@ -350,7 +386,7 @@ def crack_vigenere(
     # Fallback if no results
     if not all_results and dictionary_keys:
         for kw in [w for w in dictionary_keys if 1 <= len(w) <= fallback_max_len]:
-            pt = vigenere_decrypt(ciphertext_raw, kw)
+            pt = decrypt_func(ciphertext_raw, kw, homophonic_map)
             wf_r3, wf_v3, wf_t3 = wf_scorer.score(pt)
             if seg_scorer:
                 seg_r3, seg_v3, seg_t3 = seg_scorer.score(pt)
@@ -367,11 +403,18 @@ def crack_vigenere(
 
 # ─── N-Gram Hill-Climb & Simulated Annealing Attacks ─────────────────────────
 
-def hill_climb_search(ciphertext: str, key_length: int, scorer: NGramStrategy,
-                      max_rounds: int = 20) -> Tuple[str, str, float]:
-    ciphertext = clean_text(ciphertext)
+def hill_climb_search(
+    ciphertext: str,
+    key_length: int,
+    scorer: NGramStrategy,
+    variant: str = "standard",
+    homophonic_map: Optional[Dict[str, Iterable[str]]] = None,
+    max_rounds: int = 20,
+) -> Tuple[str, str, float]:
+    ciphertext = clean_text(ciphertext, variant, homophonic_map)
     key = ''.join(random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(key_length))
-    best_score = scorer.score(vigenere_decrypt(ciphertext, key))
+    decrypt_func = vigenere_autokey_decrypt if variant == "autokey" else vigenere_decrypt
+    best_score = scorer.score(decrypt_func(ciphertext, key, homophonic_map), variant, homophonic_map)
     improved = True
     while improved:
         improved = False
@@ -381,8 +424,8 @@ def hill_climb_search(ciphertext: str, key_length: int, scorer: NGramStrategy,
             best_char = current_letter
             for ch in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
                 trial_key = key[:pos] + ch + key[pos+1:]
-                pt = vigenere_decrypt(ciphertext, trial_key)
-                sc = scorer.score(pt)
+                pt = decrypt_func(ciphertext, trial_key, homophonic_map)
+                sc = scorer.score(pt, variant, homophonic_map)
                 if sc > current_best:
                     current_best = sc
                     best_char = ch
@@ -390,7 +433,7 @@ def hill_climb_search(ciphertext: str, key_length: int, scorer: NGramStrategy,
                 key = key[:pos] + best_char + key[pos+1:]
                 best_score = current_best
                 improved = True
-    plaintext = vigenere_decrypt(ciphertext, key)
+    plaintext = decrypt_func(ciphertext, key, homophonic_map)
     return key, plaintext, best_score
 
 
@@ -398,44 +441,49 @@ def simulated_annealing_search(
     ciphertext: str,
     key_length: int,
     scorer: NGramStrategy,
+    variant: str = "standard",
+    homophonic_map: Optional[Dict[str, Iterable[str]]] = None,
     iterations: int = 1000,
     temp: float = 20.0,
     cooling: float = 0.995,
 ) -> Tuple[str, str, float]:
-    ciphertext = clean_text(ciphertext)
+    ciphertext = clean_text(ciphertext, variant, homophonic_map)
     key = ''.join(random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(key_length))
-    plain = vigenere_decrypt(ciphertext, key)
-    score = scorer.score(plain)
+    decrypt_func = vigenere_autokey_decrypt if variant == "autokey" else vigenere_decrypt
+    plain = decrypt_func(ciphertext, key, homophonic_map)
+    score = scorer.score(plain, variant, homophonic_map)
     best_key, best_score = key, score
 
     for _ in range(iterations):
         pos = random.randrange(key_length)
         ch = random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
         cand_key = key[:pos] + ch + key[pos+1:]
-        cand_plain = vigenere_decrypt(ciphertext, cand_key)
-        cand_score = scorer.score(cand_plain)
+        cand_plain = decrypt_func(ciphertext, cand_key, homophonic_map)
+        cand_score = scorer.score(cand_plain, variant, homophonic_map)
         if cand_score > score or math.exp((cand_score - score) / temp) > random.random():
             key, score = cand_key, cand_score
             if score > best_score:
                 best_key, best_score = key, score
         temp = max(temp * cooling, 0.1)
 
-    plaintext = vigenere_decrypt(ciphertext, best_key)
+    plaintext = decrypt_func(ciphertext, best_key, homophonic_map)
     return best_key, plaintext, best_score
 
 
 def crack_vigenere_hill(
     ciphertext_raw: str,
+    variant: str = "standard",
+    homophonic_map: Optional[Dict[str, Iterable[str]]] = None,
     max_key_length: int = 12,
     top_n_lengths: int = 3,
     top_n_results: int = 5,
 ) -> List[Tuple[float, str, str, str]]:
-    cipher = clean_text(ciphertext_raw)
+    cipher = clean_text(ciphertext_raw, variant, homophonic_map)
     lengths = guess_key_lengths_ic(cipher, max_length=max_key_length, top_n=top_n_lengths)
-    scorer = NGramStrategy()
+    scorer = NGramStrategy(variant=variant, homophonic_map=homophonic_map)
     results = []
     for L in lengths:
-        key, pt, sc = hill_climb_search(cipher, L, scorer)
+        key, pt, sc = hill_climb_search(cipher, L, scorer, variant, homophonic_map)
         results.append((sc, f"Hill(L={L})", key, pt))
     results.sort(reverse=True, key=lambda x: x[0])
     return results[:top_n_results]
@@ -443,16 +491,18 @@ def crack_vigenere_hill(
 
 def crack_vigenere_anneal(
     ciphertext_raw: str,
+    variant: str = "standard",
+    homophonic_map: Optional[Dict[str, Iterable[str]]] = None,
     max_key_length: int = 12,
     top_n_lengths: int = 3,
     top_n_results: int = 5,
 ) -> List[Tuple[float, str, str, str]]:
-    cipher = clean_text(ciphertext_raw)
+    cipher = clean_text(ciphertext_raw, variant, homophonic_map)
     lengths = guess_key_lengths_ic(cipher, max_length=max_key_length, top_n=top_n_lengths)
-    scorer = NGramStrategy()
+    scorer = NGramStrategy(variant=variant, homophonic_map=homophonic_map)
     results = []
     for L in lengths:
-        key, pt, sc = simulated_annealing_search(cipher, L, scorer)
+        key, pt, sc = simulated_annealing_search(cipher, L, scorer, variant, homophonic_map)
         results.append((sc, f"Anneal(L={L})", key, pt))
     results.sort(reverse=True, key=lambda x: x[0])
     return results[:top_n_results]
