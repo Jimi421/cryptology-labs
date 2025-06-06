@@ -2,6 +2,7 @@
 
 import os
 import logging
+import json
 import yaml
 import click
 from pathlib import Path
@@ -53,6 +54,11 @@ def load_config(profile: str, config_path: str = "config.yaml") -> dict:
               help="Enable or disable Kasiski examination. Overrides config.")
 @click.option("--wordlist", "-l", type=click.Path(exists=True),
               help="Path to a local wordlist file for dictionary fallback (length ≤ 4).")
+@click.option("--variant", type=click.Choice(["standard", "autokey", "homophonic"]),
+              default="standard", show_default=True,
+              help="Vigenère variant to use for decryption.")
+@click.option("--homophonic-map", type=click.Path(exists=True),
+              help="JSON file describing homophonic mapping (for homophonic variant).")
 @click.option("--crib", "-x", type=str,
               help="Known plaintext fragment used as a crib for key hints.")
 @click.option("--max-keylen", "-k", type=int, default=None,
@@ -77,6 +83,8 @@ def main(
     watch,
     use_kasiski,
     wordlist,
+    variant,
+    homophonic_map,
     crib,
     max_keylen,
     top_lengths,
@@ -101,6 +109,16 @@ def main(
     conf = load_config(profile)
     use_kasiski = use_kasiski if use_kasiski is not None else conf.get("use_kasiski", True)
     wordlist = wordlist or conf.get("wordlist_path", None)
+    variant = variant or conf.get("variant", "standard")
+    homophonic_map = homophonic_map or conf.get("homophonic_map", None)
+    mapping_dict = None
+    if homophonic_map:
+        try:
+            with open(homophonic_map, "r", encoding="utf-8") as f:
+                mapping_dict = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load homophonic map: {e}")
+            mapping_dict = None
     max_keylen = max_keylen if max_keylen is not None else conf.get("max_key_length", 12)
     top_lengths = top_lengths if top_lengths is not None else conf.get("top_n_lengths", 3)
     top_results = top_results if top_results is not None else conf.get("top_n_results", 5)
@@ -115,6 +133,9 @@ def main(
         click.echo(f"  Profile:        {profile}")
         click.echo(f"  Use Kasiski:    {use_kasiski}")
         click.echo(f"  Wordlist Path:  {wordlist}")
+        click.echo(f"  Variant:       {variant}")
+        if mapping_dict:
+            click.echo(f"  Homophonic Map: {homophonic_map}")
         click.echo(f"  Crib:          {crib}")
         click.echo(f"  Max Key Length: {max_keylen}")
         click.echo(f"  Top Lengths:    {top_lengths}")
@@ -159,6 +180,8 @@ def main(
                     if hill_climb:
                         results = crack_vigenere_hill(
                             ct_raw,
+                            variant=variant,
+                            homophonic_map=mapping_dict,
                             max_key_length=max_keylen,
                             top_n_lengths=top_lengths,
                             top_n_results=top_results,
@@ -166,6 +189,8 @@ def main(
                     elif anneal:
                         results = crack_vigenere_anneal(
                             ct_raw,
+                            variant=variant,
+                            homophonic_map=mapping_dict,
                             max_key_length=max_keylen,
                             top_n_lengths=top_lengths,
                             top_n_results=top_results,
@@ -176,6 +201,8 @@ def main(
                             use_kasiski=use_kasiski,
                             wordlist_path=wordlist,
                             crib=crib,
+                            variant=variant,
+                            homophonic_map=mapping_dict,
                             max_key_length=max_keylen,
                             top_n_lengths=top_lengths,
                             top_n_results=top_results,
@@ -225,6 +252,8 @@ def main(
                 if hill_climb:
                     results = crack_vigenere_hill(
                         ct_raw,
+                        variant=variant,
+                        homophonic_map=mapping_dict,
                         max_key_length=max_keylen,
                         top_n_lengths=top_lengths,
                         top_n_results=top_results,
@@ -232,6 +261,8 @@ def main(
                 elif anneal:
                     results = crack_vigenere_anneal(
                         ct_raw,
+                        variant=variant,
+                        homophonic_map=mapping_dict,
                         max_key_length=max_keylen,
                         top_n_lengths=top_lengths,
                         top_n_results=top_results,
@@ -242,6 +273,8 @@ def main(
                         use_kasiski=use_kasiski,
                         wordlist_path=wordlist,
                         crib=crib,
+                        variant=variant,
+                        homophonic_map=mapping_dict,
                         max_key_length=max_keylen,
                         top_n_lengths=top_lengths,
                         top_n_results=top_results,
@@ -267,7 +300,7 @@ def main(
             ct_raw = ciphertext
 
         if preview:
-            cleaned = clean_text(ct_raw)
+            cleaned = clean_text(ct_raw, variant, mapping_dict)
             ic_lens = guess_key_lengths_ic(cleaned, max_length=max_keylen, top_n=top_lengths)
             kas_lens = guess_key_lengths_kasiski(cleaned, seq_len=3, top_n=top_lengths) if use_kasiski else []
             click.echo(f"[Preview] IC→{ic_lens}, Kasiski→{kas_lens}")
@@ -276,6 +309,8 @@ def main(
         if hill_climb:
             results = crack_vigenere_hill(
                 ct_raw,
+                variant=variant,
+                homophonic_map=mapping_dict,
                 max_key_length=max_keylen,
                 top_n_lengths=top_lengths,
                 top_n_results=top_results,
@@ -283,6 +318,8 @@ def main(
         elif anneal:
             results = crack_vigenere_anneal(
                 ct_raw,
+                variant=variant,
+                homophonic_map=mapping_dict,
                 max_key_length=max_keylen,
                 top_n_lengths=top_lengths,
                 top_n_results=top_results,
@@ -293,6 +330,8 @@ def main(
                 use_kasiski=use_kasiski,
                 wordlist_path=wordlist,
                 crib=crib,
+                variant=variant,
+                homophonic_map=mapping_dict,
                 max_key_length=max_keylen,
                 top_n_lengths=top_lengths,
                 top_n_results=top_results
