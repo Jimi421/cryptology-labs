@@ -11,7 +11,7 @@ Each folder contains a standalone module or utility designed to analyze, break, 
 | Module | Description |
 |--------|-------------|
 | `caesar/` | Caesar Cipher decoding suite with scoring heuristics, brute-force, TUI slider, and GPT-backed fallback |
-| `vigenere_cipher.py/` | Advanced Vigenère cracking CLI with IC & Kasiski analysis, wordfreq and n‑gram scoring, hill‑climb/annealing attacks, batch/watch modes, and crib-based key hints |
+| `vigenere_cipher.py/` | Advanced Vigenère cracking CLI with IC & Kasiski analysis, wordfreq and n‑gram scoring, hill‑climb/annealing attacks, batch/watch modes, crib-based key hints, and variant support (`--variant autokey|homophonic`) |
 | `substitution/` | *(Planned)* Tools for breaking monoalphabetic substitution ciphers using statistical methods |
 | `rsa/` | *(Planned)* Modular RSA demo with key generation, signing, and encryption primitives |
 | `playfair/` | *(Planned)* Playfair cipher grid tools for encoding/decoding and visualization |
